@@ -37,7 +37,8 @@ export async function GET() {
           select: {
             careers: true,
             documents: true,
-            messages: true,
+            sentMessages: true,
+            receivedMessages: true,
           },
         },
       },
