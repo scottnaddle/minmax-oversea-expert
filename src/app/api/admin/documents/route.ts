@@ -30,21 +30,17 @@ export async function GET(request: Request) {
     if (status) where.status = status
     if (type) where.type = type
 
-    const documents = await prisma.document.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    })
+    const whereBase: any = {}
+    if (type) whereBase.type = type
 
-    return NextResponse.json({ documents })
+    const [documents, pending, approved, rejected] = await Promise.all([
+      prisma.document.findMany({ where, include: { user: { select: { id: true, name: true, email: true } } }, orderBy: { createdAt: 'desc' } }),
+      prisma.document.count({ where: { ...whereBase, status: 'pending' } }),
+      prisma.document.count({ where: { ...whereBase, status: 'approved' } }),
+      prisma.document.count({ where: { ...whereBase, status: 'rejected' } }),
+    ])
+
+    return NextResponse.json({ documents, pending, approved, rejected, total: documents.length })
   } catch (error) {
     console.error('Get documents error:', error)
     return NextResponse.json({ error: '서버 오류가 발생했습니다' }, { status: 500 })
