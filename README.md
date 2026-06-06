@@ -72,6 +72,10 @@ public/
 └── robots.txt, sitemap.xml
 ```
 
+## 자동 푸시
+
+이 프로젝트는 git `post-commit` hook을 통해 **모든 커밋 후 자동으로 GitHub에 푸시**됩니다.
+
 ## CAIND 정보
 
 - **협회**: 사단법인 국제개발컨설팅협회 (Consulting Association for International Development)
