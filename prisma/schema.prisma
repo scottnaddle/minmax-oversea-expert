@@ -1,0 +1,393 @@
+// This is your Prisma schema file,
+// learn more about it in our docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  name          String
+  englishName   String?
+  dateOfBirth   String?
+  nationality   String?
+  currentCountry String?
+  currentCity   String?
+  phone         String?
+  bio           String?
+  profileImage  String?
+  userType      String    @default("expert") // 'expert' (개인) or 'enterprise' (기업)
+  role          String    @default("user") // 'user' or 'admin'
+  emailVerified Boolean   @default(false)
+  resetToken    String?
+  resetTokenExpiry DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // 기업회원 전용 필드
+  businessNumber     String?  // 사업자등록번호
+  businessName       String?  // 사업자명 (회사명)
+  businessType       String?  // 업종
+  representativeName String?  // 대표자명
+  establishedDate    String?  // 설립일
+  companyPhone       String?  // 회사 전화번호
+  companyAddress     String?  // 회사 주소
+
+  // Relations
+  educations    Education[]
+  languages     Language[]
+  certifications Certification[]
+  careers       Career[]
+  documents     Document[]
+  certificates  Certificate[]
+  sentMessages  Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  notifications Notification[]
+  profileViews ProfileView[]
+  inquiries Inquiry[]
+  replies InquiryReply[]
+  consultationRequests Consultation[] @relation("ConsultationRequests")
+  consultationAssigned Consultation[] @relation("ConsultationAssigned")
+  consultationReplies ConsultationReply[]
+  payments Payment[]
+  certificateRequests CertificateRequest[]
+
+  // 기업회원 ↔ 소속기술자 관계
+  managedEmployees EmployeeRelation[] @relation("CorporateManager")
+  employeeOf        EmployeeRelation[] @relation("Employee")
+  verificationRequests VerificationRequest[] @relation("RequestedToVerify")
+  sentVerifications    VerificationRequest[] @relation("RequestedBy")
+  proxyApplications    ProxyApplication[]
+}
+
+// 기업회원 ↔ 개인회원 소속 관계
+model EmployeeRelation {
+  id              String   @id @default(cuid())
+  corporateId     String   // 기업회원 User.id
+  employeeId      String   // 개인회원 User.id
+  department      String?  // 부서명
+  position        String?  // 직위
+  // 경력관리 위탁 동의
+  consentGiven    Boolean  @default(false)  // 경력관리 위탁 동의
+  consentType     String?  // 'full' (전체 위탁), 'partial' (부분 위탁)
+  consentStartDate DateTime?
+  consentEndDate  DateTime?
+  // 수수료 대납 동의
+  paymentConsent  Boolean  @default(false)  // 수수료 대납 동의
+  status          String   @default("active") // 'active', 'inactive', 'terminated'
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  corporate       User     @relation("CorporateManager", fields: [corporateId], references: [id], onDelete: Cascade)
+  employee        User     @relation("Employee", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([corporateId, employeeId])
+}
+
+// 기업확인요청 (개인 → 기업에 경력 검증 요청)
+model VerificationRequest {
+  id              String   @id @default(cuid())
+  careerId        String   // Career.id
+  requesterId     String   // 요청한 개인회원
+  corporateId     String   // 응답할 기업회원
+  status          String   @default("pending") // 'pending', 'approved', 'rejected'
+  rejectionReason String?
+  certificateUrl  String?  // 기업 범용 공인인증서 서명 데이터
+  signedAt        DateTime?
+  expiresAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  career          Career   @relation(fields: [careerId], references: [id], onDelete: Cascade)
+  requester       User     @relation("RequestedBy", fields: [requesterId], references: [id], onDelete: Cascade)
+  corporate       User     @relation("RequestedToVerify", fields: [corporateId], references: [id], onDelete: Cascade)
+}
+
+// 대리 신청 (기업이 개인 대신)
+model ProxyApplication {
+  id              String   @id @default(cuid())
+  corporateId     String
+  employeeId      String
+  type            String   // 'career', 'certificate'
+  careerId        String?
+  certificateRequestId String?
+  status          String   @default("pending")
+  reason          String?  // 신청 사유
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  corporate       User     @relation(fields: [corporateId], references: [id], onDelete: Cascade)
+}
+
+model Education {
+  id              String   @id @default(cuid())
+  userId          String
+  school          String
+  major           String
+  degree          String
+  country         String
+  graduationYear  Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Language {
+  id              String   @id @default(cuid())
+  userId          String
+  language        String
+  proficiency     String   // 'beginner', 'intermediate', 'advanced', 'native'
+  certificate     String?
+  score           String?
+  expirationDate  DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Certification {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String
+  issuer          String
+  issuedDate      DateTime
+  expirationDate  DateTime?
+  credentialId    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Career {
+  id          String    @id @default(cuid())
+  userId      String
+  company     String
+  position    String
+  country     String
+  startDate   DateTime
+  endDate     DateTime?
+  isCurrent   Boolean   @default(false)
+  description String?
+  // 경력신청 6가지 중 카테고리 (매뉴얼 기준)
+  category    String    @default("employment") // 'employment' (근무), 'technical' (기술), 'education' (학력), 'certification' (자격), 'training' (교육), 'award' (상훈)
+  // ITSQF 직무 분류
+  itsqfCategory String?  // ITSQF IT 분야역량체계 카테고리
+  itsqfRole     String?  // ITSQF 직무영역
+  // 경력 검증 상태
+  verificationStatus String? @default("unsubmitted") // 'unsubmitted', 'pending', 'verified', 'rejected', 'corporate_requested'
+  verifiedAt   DateTime?
+  verifiedBy   String?  // 검증한 기업 ID
+  // 증빙 방법
+  proofMethod  String?  // 'corporate_request' (기업확인요청), 'online' (온라인제출), 'mail' (우편방문)
+  // 진행 상태 (매뉴얼 기준)
+  applicationStatus String? @default("draft") // 'draft', 'submitted', 'reviewing', 'supplement', 'completed', 'rejected'
+  supplementReason String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects    Project[]
+  documents   Document[]
+  verifications VerificationRequest[]
+}
+
+model Project {
+  id            String   @id @default(cuid())
+  careerId      String
+  name          String
+  description   String
+  role          String
+  startDate     DateTime
+  endDate       DateTime?
+  countries     String   // JSON array stored as string
+  industries    String   // JSON array stored as string
+  businessTypes String   // JSON array stored as string
+  achievements  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  career        Career   @relation(fields: [careerId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id              String   @id @default(cuid())
+  userId          String
+  careerId        String?
+  name            String
+  type            String   // 'employment', 'career', 'certification', 'degree', 'other'
+  fileUrl         String
+  fileKey         String
+  status          String   @default("pending") // 'pending', 'approved', 'rejected'
+  rejectionReason String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  career          Career?  @relation(fields: [careerId], references: [id], onDelete: SetNull)
+}
+
+model Certificate {
+  id              String   @id @default(cuid())
+  userId          String
+  certificateNumber String @unique
+  issuedAt        DateTime
+  pdfUrl          String?
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  senderId    String
+  receiverId  String
+  subject     String
+  content     String
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  sender      User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // 'profile_view', 'job_offer', 'document_approved', 'document_rejected', 'message'
+  title     String
+  content   String
+  read      Boolean  @default(false)
+  data      String?  // JSON string for additional data
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ProfileView {
+  id        String   @id @default(cuid())
+  viewerId  String
+  viewedId  String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+}
+
+// 문의 게시판
+model Inquiry {
+  id          String   @id @default(cuid())
+  userId      String
+  category    String   @default("general") // 'general', 'career', 'project', 'technical', 'consultation'
+  title       String
+  content     String
+  status      String   @default("open") // 'open', 'answered', 'closed'
+  isPrivate   Boolean  @default(false) // true면 작성자+관리자만 확인
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replies     InquiryReply[]
+}
+
+// 문의 답변
+model InquiryReply {
+  id          String   @id @default(cuid())
+  inquiryId   String
+  userId      String   // 관리자 또는 작성자
+  content     String
+  createdAt   DateTime @default(now())
+
+  inquiry     Inquiry  @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// 1:1 상담 예약
+model Consultation {
+  id          String   @id @default(cuid())
+  userId      String
+  expertId    String?  // 선택적 전문가 지정
+  type        String   // 'career', 'project', 'technical', 'other'
+  title       String
+  content     String
+  preferredDate String?
+  status      String   @default("pending") // 'pending', 'confirmed', 'completed', 'cancelled'
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation("ConsultationRequests", fields: [userId], references: [id], onDelete: Cascade)
+  expert      User?    @relation("ConsultationAssigned", fields: [expertId], references: [id])
+  replies     ConsultationReply[]
+}
+
+model ConsultationReply {
+  id             String   @id @default(cuid())
+  consultationId String
+  userId         String
+  content        String
+  createdAt      DateTime @default(now())
+
+  consultation   Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// 결제 정보
+model Payment {
+  id              String   @id @default(cuid())
+  userId          String
+  amount          Int      // 금액 (원)
+  currency        String   @default("krw")
+  status          String   @default("pending") // 'pending', 'completed', 'failed', 'refunded'
+  paymentMethod   String?  // 'card', 'bank_transfer'
+  stripePaymentId String?  @unique // Stripe Payment Intent ID
+  description     String   // 결제 설명
+  metadata        String?  // JSON string for additional data
+  createdAt      DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  certificateRequest CertificateRequest?
+}
+
+// 증명서 발급 요청
+model CertificateRequest {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String   // 'career', 'oda_experience', 'project', 'education'
+  title       String   // 증명서 제목
+  content     String   // 증명서 내용 (요약)
+  status      String   @default("pending") // 'pending', 'paid', 'approved', 'issued', 'rejected'
+  paymentId   String?  @unique // Payment ID
+  approvedBy  String?  // 관리자 ID
+  approvedAt  DateTime?
+  issuedAt    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payment     Payment? @relation(fields: [paymentId], references: [id])
+  document    CertificateDocument?
+}
+
+// 발급된 증명서 문서
+model CertificateDocument {
+  id              String   @id @default(cuid())
+  requestId       String   @unique
+  certificateId   String   @unique  // 인증 ID (QR에 사용)
+  pdfUrl          String?  // PDF 파일 경로
+  qrCode          String?  // QR 코드 이미지 경로
+  issuedAt        DateTime @default(now())
+  expiresAt       DateTime? // 만료일 (선택)
+  isVerified      Boolean  @default(true)
+
+  request         CertificateRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
